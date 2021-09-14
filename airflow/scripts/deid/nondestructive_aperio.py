@@ -1,3 +1,12 @@
+"""
+This module deidentifies Aperio SVS slide files NON-destructively.
+Invoke deid_aperio_svs(in_filename, out_filename) and a new deidentified file
+will be written.
+
+This code should have pretty much the same result as the destructive variant
+but uses a different internal mechanism.
+"""
+
 import tifftools
 import sys
 import re

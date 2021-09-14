@@ -1,11 +1,17 @@
 """
-This module deidentifies Aperio SVS slide files.
-Invoke deid_aperio_svs(filepath) and the file will be destructively deidentified in-place.
+This module deidentifies Aperio SVS slide files destructively.
+Invoke deid_aperio_svs(filepath) and the file will be deidentified in-place.
+
+This code should have pretty much the same result as the non-destructive variant
+but uses a different internal mechanism.
 """
 
 import re
+import sys
 
-from d3b_imaging_deid.svs.tiff import IMAGE_DESCRIPTION, TiffFile, UnrecognizedFile
+# This module uses the (GPLv2) TIFF file container extracted from
+# https://github.com/bgilbert/anonymize-slide/blob/31efede655ab09fd0b737621dfc08049cefde3cc/anonymize_slide.py
+from .tiff import IMAGE_DESCRIPTION, TiffFile, UnrecognizedFile
 
 TIFF_SUBFILETYPE = 254
 
@@ -39,10 +45,12 @@ def confirm_aperio_svs(tiff_handle):
     :param tiff_handle: an open TIFF handle
     :type tiff_handle: TiffFile
     :raises UnrecognizedFile: if any confirmation checks fail
+
+    Usage:
+
+    with TiffFile(filepath) as tf:
+        confirm_aperio_svs(tf)
     """
-    # desc0 = tiff_handle.directories[0].entries[IMAGE_DESCRIPTION].value()
-    # if not desc0.startswith(b"Aperio"):
-    #     raise UnrecognizedFile("Image Description doesn't start with Aperio")
     for i in reversed(range(len(tiff_handle.directories))):
         dir = tiff_handle.directories[i]
         if TIFF_SUBFILETYPE not in dir.entries:
@@ -108,3 +116,7 @@ def deid_aperio_svs(filepath):
                 msgs.append(f"D{LABEL_SFT[sft]}")
 
         return f"{len(tf.directories)} {','.join(reversed(msgs))}"
+
+
+if __name__ == "__main__":
+    deid_aperio_svs(sys.argv[1])
