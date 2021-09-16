@@ -67,6 +67,8 @@ def deid_with_hashes(source_s3_key, dest_s3_key):
         hasher1 = hash_file(f_source.name)
         print(f"Source file {hasher1.name} hash: {hasher1.hexdigest()}")
 
+        # This specifically does Aperio SVS. Want to do other formats as well?
+        # You could catch UnrecognizedFile (in nondestructive_aperio) and move on.
         print(f"De-identifying to new temporary file {f_dest.name}")
         message = deid_aperio_svs(f_source.name, f_dest.name)
         f_dest.flush()
