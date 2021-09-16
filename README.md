@@ -75,4 +75,5 @@ over the stripped IFDs instead of writing a new file without them at all.
 
 It should have basically the same result as nondestructive_aperio.py but is
 done in a different way. This way is a little faster and does not alter the
-size of the files but works directly on the input.
+size of the files but works directly on the input. _License is GPLv2 because
+of the included TiffFile module._
