@@ -11,8 +11,10 @@ import tifftools
 import sys
 import re
 
+
 class UnrecognizedFile(Exception):
     pass
+
 
 KEEP = {
     "appmag",
@@ -39,7 +41,7 @@ LABEL_SFT = {1: "label", 9: "macro"}
 
 def deid_aperio_svs(in_filename, out_filename):
     tiffinfo = tifftools.read_tiff(in_filename)
-    input_ifds = tiffinfo['ifds']
+    input_ifds = tiffinfo["ifds"]
 
     msgs = f"{len(input_ifds)}"
     kept_ifds = []
@@ -53,10 +55,14 @@ def deid_aperio_svs(in_filename, out_filename):
             if tifftools.Tag.ImageDescription.value not in ifd["tags"]:
                 raise UnrecognizedFile(f"IFD {i} missing IMAGE_DESCRIPTION")
 
-            img_desc = ifd["tags"][tifftools.Tag.ImageDescription.value]["data"].strip()
+            img_desc = ifd["tags"][tifftools.Tag.ImageDescription.value][
+                "data"
+            ].strip()
 
             if not img_desc.startswith("Aperio"):
-                raise UnrecognizedFile(f"Description {i} doesn't start with Aperio")
+                raise UnrecognizedFile(
+                    f"Description {i} doesn't start with Aperio"
+                )
 
             # Last line of description should start with image dimensions.
             # This may be purely anecdotal. Let's confirm.
@@ -89,7 +95,9 @@ def deid_aperio_svs(in_filename, out_filename):
         elif i < 2:
             raise UnrecognizedFile("Missing initial non-label IFDs")
         else:
-            raise UnrecognizedFile(f"IFD {i} SUBFILETYPE {sft} isn't 0, 1, or 9")
+            raise UnrecognizedFile(
+                f"IFD {i} SUBFILETYPE {sft} isn't 0, 1, or 9"
+            )
 
     tifftools.write_tiff(kept_ifds, out_filename, allowExisting=True)
     return msgs
