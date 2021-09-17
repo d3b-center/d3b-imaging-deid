@@ -59,8 +59,8 @@ def deid_with_hashes(source_s3_key, dest_s3_key):
     dest_s3 = S3Hook(aws_conn_id="deid_s3_dest_connection")
 
     with TemporaryFile("wb") as f_source, TemporaryFile("wb") as f_dest:
-        print(f"Downloading {s3_source_path} to temporary copy {f_source.name}")
-        source_s3.get_key(s3_source_path).download_fileobj(Fileobj=f_source)
+        print(f"Downloading {source_s3_key} to temporary copy {f_source.name}")
+        source_s3.get_key(source_s3_key).download_fileobj(Fileobj=f_source)
         f_source.flush()
 
         print(f"Hashing source copy")
