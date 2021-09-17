@@ -15,7 +15,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.utils.dates import days_ago
-from scripts.deid.nondestructive_aperio import deid_aperio_svs
+from nondestructive_aperio import deid_aperio_svs
 
 
 default_args = {
