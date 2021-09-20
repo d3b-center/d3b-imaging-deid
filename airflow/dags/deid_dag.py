@@ -171,7 +171,7 @@ with DAG(
         python_callable=deid_with_hashes,
         op_kwargs={
             "source_s3_key": s3sourcepath,
-            "dest_s3_key": s3destdir,
+            "dest_s3_dir": s3destdir,
         },
     )
 
