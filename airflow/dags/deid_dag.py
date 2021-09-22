@@ -7,7 +7,7 @@ import hashlib
 import os
 import secrets
 from datetime import timedelta
-from tempfile import TemporaryFile
+from tempfile import TemporaryDirectory
 
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -61,28 +61,28 @@ def deid_with_hashes(source_s3_key, dest_s3_dir):
     ext = os.path.splitext(source_s3_key)[1]
     dest_s3_key = dest_s3_dir.rstrip("/") + "/" + secrets.token_hex(32) + ext
 
-    with TemporaryFile("wb") as f_source, TemporaryFile("wb") as f_dest:
-        print(f"Downloading {source_s3_key} to temporary copy {f_source.name}")
-        source_s3.get_key(source_s3_key).download_fileobj(Fileobj=f_source)
-        f_source.flush()
+    with TemporaryDirectory() as f_dir:
+        infile_path = os.path.join(f_dir, "infile")
+        print(f"Downloading {source_s3_key} to temporary location {infile_path}")
+        source_s3.get_key(source_s3_key).download_file(infile_path)
 
         print(f"Hashing source copy")
-        hasher1 = hash_file(f_source.name)
-        print(f"Source file {hasher1.name} hash: {hasher1.hexdigest()}")
+        hasher1 = hash_file(infile_path)
+        print(f"Source file hash: {hasher1.hexdigest()}")
 
         # This specifically does Aperio SVS. Want to do other formats as well?
         # You could catch UnrecognizedFile (in nondestructive_aperio) and move on.
-        print(f"De-identifying to new temporary file {f_dest.name}")
-        message = deid_aperio_svs(f_source.name, f_dest.name)
-        f_dest.flush()
+        outfile_path = os.path.join(f_dir, "outfile")
+        print(f"De-identifying to new temporary file {outfile_path}")
+        message = deid_aperio_svs(infile_path, outfile_path)
         print(f"De-identification status output: {message}")
 
         print(f"Hashing de-identified file")
-        hasher2 = hash_file(f_dest.name)
-        print(f"De-identified file {hasher2.name} hash: {hasher2.hexdigest()}")
+        hasher2 = hash_file(outfile_path)
+        print(f"De-identified file hash: {hasher2.hexdigest()}")
 
         print(f"Uploading de-dentified file to {dest_s3_key}")
-        dest_s3.load_file(filename=f_dest.name, key=dest_s3_key)
+        dest_s3.load_file(filename=outfile_path, key=dest_s3_key)
         print("Done uploading")
 
     # return gets pushed to xcom
