@@ -16,7 +16,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.utils.dates import days_ago
-import scripts.deid.nondestructive_aperio
+from scripts.deid.nondestructive_aperio import deid_aperio_svs
 
 
 default_args = {
@@ -80,7 +80,7 @@ def deid_with_hashes(source_s3_key, dest_s3_dir):
         print(f"De-identifying to new temporary file {outfile_path}")
 
         try:
-            message = nondestructive_aperio.deid_aperio_svs(infile_path, outfile_path)
+            message = deid_aperio_svs(infile_path, outfile_path)
         except Exception as e:
             raise AirflowFailException("Not a valid Aperio SVS file?") from e
 
