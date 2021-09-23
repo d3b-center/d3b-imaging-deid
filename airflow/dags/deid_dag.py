@@ -18,7 +18,6 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.utils.dates import days_ago
 from scripts.deid.nondestructive_aperio import deid_aperio_svs
 
-
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
@@ -62,9 +61,6 @@ def deid_with_hashes(source_s3_key, dest_s3_dir):
     source_s3 = S3Hook(aws_conn_id="deid_s3_source_connection")
     dest_s3 = S3Hook(aws_conn_id="deid_s3_dest_connection")
 
-    ext = os.path.splitext(source_s3_key)[1]
-    dest_s3_key = dest_s3_dir.rstrip("/") + "/" + secrets.token_hex(32) + ext
-
     # TemporaryDirectory context makes sure that the local files get deleted
     with TemporaryDirectory() as f_dir:
         infile_path = os.path.join(f_dir, "infile")
@@ -96,9 +92,17 @@ def deid_with_hashes(source_s3_key, dest_s3_dir):
         logging.info(f"Output file sha256: {sha256_2}")
         logging.info(f"Output file md5: {md5_2}")
 
+        ext = os.path.splitext(source_s3_key)[1]
+        dest_s3_key = dest_s3_dir.rstrip("/") + "/" + sha256_2 + ext
+        # or if you want randomly generated output filenames, use
+        # dest_s3_key = dest_s3_dir.rstrip("/") + "/" + secrets.token_hex(32) + ext
+
         logging.info(f"Uploading output file to {dest_s3_key}")
         dest_s3.load_file(
-            filename=outfile_path, key=dest_s3_key, acl_policy="bucket-owner-full-control"
+            filename=outfile_path,
+            key=dest_s3_key,
+            replace=True,
+            acl_policy="bucket-owner-full-control",
         )
         logging.info("Done uploading")
 
