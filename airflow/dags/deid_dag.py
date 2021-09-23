@@ -37,13 +37,15 @@ s3destdir = '{{ dag_run.conf["s3destdir"] }}'
 
 def hash_file(filepath):
     """
-    Generate sha256 hash of file at filepath.
+    Generate sha256 and md5 hashes of file at filepath.
     """
-    hasher = hashlib.sha256()
+    sha256 = hashlib.sha256()
+    md5 = hashlib.md5()
     with open(filepath, "rb") as f:
         for data in iter(lambda: f.read(128 * 1024), b""):
-            hasher.update(data)
-    return hasher
+            sha256.update(data)
+            md5.update(data)
+    return sha256.hexdigest(), md5.hexdigest()
 
 
 def deid_with_hashes(source_s3_key, dest_s3_dir):
@@ -62,45 +64,47 @@ def deid_with_hashes(source_s3_key, dest_s3_dir):
 
     ext = os.path.splitext(source_s3_key)[1]
     dest_s3_key = dest_s3_dir.rstrip("/") + "/" + secrets.token_hex(32) + ext
-    logging.info("test info")
-    logging.warning("test warning")
-    logging.error("test error")
 
+    # TemporaryDirectory context makes sure that the local files get deleted
     with TemporaryDirectory() as f_dir:
         infile_path = os.path.join(f_dir, "infile")
-        print(f"Downloading {source_s3_key} to temporary location {infile_path}")
+        logging.info(f"Downloading {source_s3_key} to temporary location {infile_path}")
         source_s3.get_key(source_s3_key).download_file(infile_path)
-        print(f"Downloaded file is {os.path.getsize(infile_path)} bytes.")
+        logging.info(f"Downloaded file is {os.path.getsize(infile_path)} bytes.")
 
-        print(f"Hashing source copy")
-        hasher1 = hash_file(infile_path)
-        print(f"Source file hash: {hasher1.hexdigest()}")
+        logging.info(f"Hashing source copy")
+        sha256_1, md5_1 = hash_file(infile_path)
+        logging.info(f"Source file sha256: {sha256_1}")
+        logging.info(f"Source file md5: {md5_1}")
 
         outfile_path = os.path.join(f_dir, "outfile")
-        print(f"De-identifying to new temporary file {outfile_path}")
+        logging.info(f"De-identifying to new temporary file {outfile_path}")
 
         try:
             message = deid_aperio_svs(infile_path, outfile_path)
         except Exception as e:
             raise AirflowFailException("Not a valid Aperio SVS file?") from e
 
-        print(f"De-identification status output: {message}")
-        print(f"Output file is {os.path.getsize(outfile_path)} bytes.")
+        logging.info(f"De-identification status output: {message}")
+        logging.info(f"Output file is {os.path.getsize(outfile_path)} bytes.")
 
-        print(f"Hashing output file")
-        hasher2 = hash_file(outfile_path)
-        print(f"Output file hash: {hasher2.hexdigest()}")
+        logging.info(f"Hashing output file")
+        sha256_2, md5_2 = hash_file(outfile_path)
+        logging.info(f"Output file sha256: {sha256_2}")
+        logging.info(f"Output file md5: {md5_2}")
 
-        print(f"Uploading output file to {dest_s3_key}")
+        logging.info(f"Uploading output file to {dest_s3_key}")
         dest_s3.load_file(filename=outfile_path, key=dest_s3_key)
-        print("Done uploading")
+        logging.info("Done uploading")
 
     # return gets pushed to xcom
     return {
         "source_key": source_s3_key,
         "dest_key": dest_s3_key,
-        "source_hash": hasher1.hexdigest(),
-        "dest_hash": hasher2.hexdigest(),
+        "source_sha256": sha256_1,
+        "source_md5": md5_1,
+        "dest_sha256": sha256_2,
+        "dest_md5": md5_2,
     }
 
 
@@ -115,17 +119,19 @@ def submit_to_db(**context):
     print(f"Recording in database")
     db_hook.run(
         """
-        INSERT INTO deidentified_files (infile, infile_sha256, outfile, outfile_sha256)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (infile, infile_sha256) DO UPDATE 
-        SET (outfile, outfile_sha256) = (EXCLUDED.outfile, EXCLUDED.outfile_sha256);
+        INSERT INTO deidentified_files (infile, infile_sha256, infile_md5, outfile, outfile_sha256, outfile_md5)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (infile, infile_sha256, infile_md5) DO UPDATE 
+        SET (outfile, outfile_sha256, outfile_md5) = (EXCLUDED.outfile, EXCLUDED.outfile_sha256, EXCLUDED.outfile_md5);
         """,
         True,
         parameters=(
             deid_xcom["source_key"],
-            deid_xcom["source_hash"],
+            deid_xcom["source_sha256"],
+            deid_xcom["source_md5"],
             deid_xcom["dest_key"],
-            deid_xcom["dest_hash"],
+            deid_xcom["dest_sha256"],
+            deid_xcom["dest_md5"],
         ),
     )
     for output in db_hook.conn.notices:
@@ -148,9 +154,11 @@ with DAG(
             CREATE TABLE IF NOT EXISTS deidentified_files(
                 infile text,
                 infile_sha256 text,
+                infile_md5 text,
                 outfile text not null unique,
                 outfile_sha256 text not null,
-                PRIMARY KEY (infile, infile_sha256)
+                outfile_md5 text not null,
+                PRIMARY KEY (infile, infile_sha256, infile_md5)
             );
         """,
     )
