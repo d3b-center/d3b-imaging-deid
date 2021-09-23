@@ -10,12 +10,13 @@ from datetime import timedelta
 from tempfile import TemporaryDirectory
 
 from airflow import DAG
+from airflow.exceptions import AirflowFailException
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.utils.dates import days_ago
-from scripts.deid.nondestructive_aperio import deid_aperio_svs
+import scripts.deid.nondestructive_aperio
 
 
 default_args = {
@@ -55,33 +56,42 @@ def deid_with_hashes(source_s3_key, dest_s3_dir):
     airflow.providers.amazon.aws.operators.s3_file_transform.S3FileTransformOperator
     but here I can hash the files before they get deleted.
     """
+    import logging
     source_s3 = S3Hook(aws_conn_id="deid_s3_source_connection")
     dest_s3 = S3Hook(aws_conn_id="deid_s3_dest_connection")
 
     ext = os.path.splitext(source_s3_key)[1]
     dest_s3_key = dest_s3_dir.rstrip("/") + "/" + secrets.token_hex(32) + ext
+    logging.info("test info")
+    logging.warning("test warning")
+    logging.error("test error")
 
     with TemporaryDirectory() as f_dir:
         infile_path = os.path.join(f_dir, "infile")
         print(f"Downloading {source_s3_key} to temporary location {infile_path}")
         source_s3.get_key(source_s3_key).download_file(infile_path)
+        print(f"Downloaded file is {os.path.getsize(infile_path)} bytes.")
 
         print(f"Hashing source copy")
         hasher1 = hash_file(infile_path)
         print(f"Source file hash: {hasher1.hexdigest()}")
 
-        # This specifically does Aperio SVS. Want to do other formats as well?
-        # You could catch UnrecognizedFile (in nondestructive_aperio) and move on.
         outfile_path = os.path.join(f_dir, "outfile")
         print(f"De-identifying to new temporary file {outfile_path}")
-        message = deid_aperio_svs(infile_path, outfile_path)
+
+        try:
+            message = nondestructive_aperio.deid_aperio_svs(infile_path, outfile_path)
+        except Exception as e:
+            raise AirflowFailException("Not a valid Aperio SVS file?") from e
+
         print(f"De-identification status output: {message}")
+        print(f"Output file is {os.path.getsize(outfile_path)} bytes.")
 
-        print(f"Hashing de-identified file")
+        print(f"Hashing output file")
         hasher2 = hash_file(outfile_path)
-        print(f"De-identified file hash: {hasher2.hexdigest()}")
+        print(f"Output file hash: {hasher2.hexdigest()}")
 
-        print(f"Uploading de-dentified file to {dest_s3_key}")
+        print(f"Uploading output file to {dest_s3_key}")
         dest_s3.load_file(filename=outfile_path, key=dest_s3_key)
         print("Done uploading")
 
