@@ -97,7 +97,9 @@ def deid_with_hashes(source_s3_key, dest_s3_dir):
         logging.info(f"Output file md5: {md5_2}")
 
         logging.info(f"Uploading output file to {dest_s3_key}")
-        dest_s3.load_file(filename=outfile_path, key=dest_s3_key)
+        dest_s3.load_file(
+            filename=outfile_path, key=dest_s3_key, acl_policy="bucket-owner-full-control"
+        )
         logging.info("Done uploading")
 
     # return gets pushed to xcom
