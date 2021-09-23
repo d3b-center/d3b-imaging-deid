@@ -80,6 +80,9 @@ def deid_with_hashes(source_s3_key, dest_s3_dir):
         outfile_path = os.path.join(f_dir, "outfile")
         logging.info(f"De-identifying to new temporary file {outfile_path}")
 
+        # NOTE: This only does SVS files. To handle other/additional file
+        # types, you'll want to change this and only raise the
+        # AirflowFailException at the end if none succeed.
         try:
             message = deid_aperio_svs(infile_path, outfile_path)
         except Exception as e:
